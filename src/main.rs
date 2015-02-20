@@ -7,7 +7,7 @@ extern crate "rustc-serialize" as rustc_serialize;
 use docopt::Docopt;
 use std::io::prelude::*;
 use std::fs::{OpenOptions,File};
-use std::io::{BufStream,BufReader,BufWriter,SeekFrom,Cursor};
+use std::io::{BufReader,BufWriter,SeekFrom};
 
 static USAGE: &'static str = "
 Usage: skip [--from-sector N] [--from-offset N] [--to-sector N] [--to-offset N] <in> <out>
@@ -64,8 +64,8 @@ fn process_file(name_in: String, name_out: String, read_offset: u64, write_offse
         Err(_) => { println!("Error opening/creating output file: {}", name_out); return; }
     };
 
-    in_file.seek(SeekFrom::Start(read_offset));
-    out_file.seek(SeekFrom::Start(write_offset));
+    in_file.seek(SeekFrom::Start(read_offset)).unwrap();
+    out_file.seek(SeekFrom::Start(write_offset)).unwrap();
 
     let file_size = in_file.metadata().unwrap().len();
     println!("Input file size: {}", file_size);
@@ -81,24 +81,33 @@ fn process_file(name_in: String, name_out: String, read_offset: u64, write_offse
     let mut reader = BufReader::new(in_file);
     let mut writer = BufWriter::new(out_file);
 
-    const BUF_SIZE_N: usize = 1024;
-    const BUF_SIZE: usize = (BUF_SIZE_N * 512) + (BUF_SIZE_N * 8);
-
-    let mut buf: Vec<u8> = Vec::new();
-    buf.resize(BUF_SIZE, 0);
-    let mut bufCursor = Cursor::new(buf.as_mut_slice());
+    let mut buf = [0u8; 512];
+    let mut sbuf = [0u8; 8];
 
     while remaining_bytes > 0 {
-        reader.read(buf.as_mut_slice());
-
-        for i in (0..BUF_SIZE_N) {
+        if let Ok(x) = reader.read(&mut buf) {
+            if x > 0 {
+                remaining_bytes -= x as u64;
+            } else {
+                println!("I/O error on reading");
+                return;
+            }
+        } else {
+            println!("I/O error on reading");
+            return;
         }
 
-        if remaining_bytes < BUF_SIZE as u64 {
-            break;
+        if let Err(_) = reader.read(&mut sbuf) {
+            println!("I/O error while reading");
+            return;
         }
 
-        remaining_bytes = remaining_bytes - BUF_SIZE as u64;
+        if let Err(_) = writer.write(&buf) {
+            println!("I/O error while saving");
+            return;
+        }
     }
+
+    println!("done");
 }
 
