@@ -1,0 +1,9 @@
+[package]
+
+name = "skip"
+version = "0.0.1"
+authors = ["Grzegorz Antoniak <ga@anadoxin.org>"]
+
+[dependencies]
+docopt="*"
+rustc-serialize="*"
